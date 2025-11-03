@@ -1,0 +1,32 @@
+# Configuration des règles OWASP ZAP
+# Ce fichier doit être placé dans .zap/rules.tsv
+# Format: ID	FAIL_THRESHOLD	WARNING_THRESHOLD	PASS
+
+# Rules activées avec seuils personnalisés
+# FAIL = Bloque le build, WARNING = Alerte mais ne bloque pas, PASS = Ignore
+
+# Règles critiques (FAIL si détectées)
+10202	FAIL	WARN	PASS	# Absence de X-Frame-Options Header
+10023	FAIL	WARN	PASS	# Information Disclosure - Debug Error Messages
+10021	FAIL	WARN	PASS	# X-Content-Type-Options Header Missing
+10038	FAIL	WARN	PASS	# Content Security Policy (CSP) Header Not Set
+90001	FAIL	WARN	PASS	# Insecure HTTP Method
+90022	FAIL	WARN	PASS	# Application Error Disclosure
+
+# Règles importantes (WARNING)
+10049	WARN	WARN	PASS	# Content Type Missing
+10054	WARN	WARN	PASS	# Cookie Without Secure Flag
+10055	WARN	WARN	PASS	# CSP Header Misconfigured
+10056	WARN	WARN	PASS	# X-Debug-Token Information Leak
+10096	WARN	WARN	PASS	# Timestamp Disclosure
+10109	WARN	WARN	PASS	# Modern Web Application
+
+# Règles informatives (PASS - pour info seulement)
+10015	PASS	PASS	PASS	# Re-examine Cache-control Directives
+10027	PASS	PASS	PASS	# Information Disclosure - Suspicious Comments
+10063	PASS	PASS	PASS	# Feature Policy Header Not Set
+10098	PASS	PASS	PASS	# Cross-Domain Misconfiguration
+
+# Note: Juice Shop étant une application volontairement vulnérable,
+# cette configuration est adaptée pour détecter les failles critiques
+# tout en étant réaliste pour l'exercice académique

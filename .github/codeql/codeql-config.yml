@@ -1,0 +1,43 @@
+# Configuration personnalisée pour CodeQL
+# Ce fichier doit être placé dans .github/codeql/codeql-config.yml
+
+name: "CodeQL Configuration for Juice Shop"
+
+# Désactiver les queries par défaut (optionnel)
+disable-default-queries: false
+
+# Ajouter des queries supplémentaires
+queries:
+  - uses: security-and-quality
+  - uses: security-extended
+
+# Définir les chemins à analyser
+paths:
+  - app
+  - routes
+  - lib
+  - models
+  - frontend/src
+
+# Exclure certains chemins de l'analyse
+paths-ignore:
+  - node_modules
+  - dist
+  - build
+  - test
+  - tests
+  - '**/*.test.js'
+  - '**/*.spec.js'
+  - frontend/dist
+  - frontend/node_modules
+
+# Configuration des queries personnalisées
+query-filters:
+  - exclude:
+      id: js/angular-double-compilation  # Spécifique à Angular
+  - exclude:
+      id: js/incomplete-sanitization     # Peut générer des faux positifs
+
+# Définir les seuils de sévérité
+# CodeQL classifie automatiquement : error, warning, note
+# Nous voulons bloquer sur error (= critical/high)

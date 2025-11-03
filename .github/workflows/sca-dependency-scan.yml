@@ -1,0 +1,149 @@
+name: SCA - Dependency Security Scan
+
+# Déclenchement du workflow
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - master
+  schedule:
+    # Scan quotidien à 2h00 UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  npm-audit:
+    name: NPM Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Étape 1 : Récupération du code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      # Étape 2 : Configuration de Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      # Étape 3 : Installation des dépendances
+      - name: Install Dependencies
+        run: npm ci
+      
+      # Étape 4 : Audit NPM des vulnérabilités
+      - name: Run NPM Audit
+        id: npm-audit
+        run: |
+          echo "🔍 Lancement de l'audit npm..."
+          
+          # Audit complet avec génération du rapport JSON
+          npm audit --json > npm-audit-report.json || true
+          
+          # Audit avec niveau de sévérité (bloque si critical)
+          npm audit --audit-level=critical
+        continue-on-error: false  # Bloque si vulnérabilités critiques
+      
+      # Étape 5 : Analyse détaillée des vulnérabilités
+      - name: Analyze Vulnerabilities
+        if: always()
+        run: |
+          echo "📊 Analyse des vulnérabilités détectées..."
+          
+          # Compter les vulnérabilités par niveau
+          CRITICAL=$(npm audit --json | jq '.metadata.vulnerabilities.critical // 0')
+          HIGH=$(npm audit --json | jq '.metadata.vulnerabilities.high // 0')
+          MODERATE=$(npm audit --json | jq '.metadata.vulnerabilities.moderate // 0')
+          LOW=$(npm audit --json | jq '.metadata.vulnerabilities.low // 0')
+          
+          echo "🔴 Critical: $CRITICAL"
+          echo "🟠 High: $HIGH"
+          echo "🟡 Moderate: $MODERATE"
+          echo "🟢 Low: $LOW"
+          
+          # Échec si vulnérabilités critiques
+          if [ "$CRITICAL" -gt 0 ]; then
+            echo "❌ ÉCHEC: Des vulnérabilités CRITICAL ont été détectées!"
+            echo "🔒 Le merge est BLOQUÉ jusqu'à résolution."
+            exit 1
+          fi
+      
+      # Étape 6 : Upload du rapport
+      - name: Upload Audit Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: npm-audit-report.json
+          retention-days: 30
+      
+      # Étape 7 : Commentaire sur PR avec résumé
+      - name: Comment PR with Audit Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let auditData;
+            
+            try {
+              auditData = JSON.parse(fs.readFileSync('npm-audit-report.json', 'utf8'));
+            } catch (error) {
+              console.log('Pas de rapport npm audit disponible');
+              return;
+            }
+            
+            const critical = auditData.metadata.vulnerabilities.critical || 0;
+            const high = auditData.metadata.vulnerabilities.high || 0;
+            const moderate = auditData.metadata.vulnerabilities.moderate || 0;
+            const low = auditData.metadata.vulnerabilities.low || 0;
+            const total = critical + high + moderate + low;
+            
+            let status = '✅';
+            let message = 'Aucune vulnérabilité critique détectée.';
+            
+            if (critical > 0) {
+              status = '❌';
+              message = `**${critical} vulnérabilité(s) CRITIQUE(S) détectée(s) !**\n\n🔒 **Le merge est BLOQUÉ** jusqu'à résolution.`;
+            } else if (high > 0) {
+              status = '⚠️';
+              message = `${high} vulnérabilité(s) HIGH détectée(s). Correction recommandée.`;
+            }
+            
+            const comment = `${status} **Analyse SCA (npm audit) terminée**\n\n` +
+                           `**Résumé des vulnérabilités :**\n` +
+                           `- 🔴 Critical: ${critical}\n` +
+                           `- 🟠 High: ${high}\n` +
+                           `- 🟡 Moderate: ${moderate}\n` +
+                           `- 🟢 Low: ${low}\n` +
+                           `- **Total: ${total}**\n\n` +
+                           `${message}\n\n` +
+                           `📄 Le rapport complet est disponible dans les artifacts.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Job séparé pour Dependabot (surveillance continue)
+  dependabot-check:
+    name: Check Dependabot Alerts
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      security-events: read
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: Check Dependabot Status
+        run: |
+          echo "📦 Dependabot est configuré pour surveiller les dépendances"
+          echo "🔔 Les alertes seront créées automatiquement dans l'onglet Security"
+          echo "🤖 Dependabot créera des PR automatiques pour les mises à jour de sécurité"

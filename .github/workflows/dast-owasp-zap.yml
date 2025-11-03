@@ -1,0 +1,125 @@
+name: DAST - Dynamic Security Scan
+
+# Déclenchement du workflow
+on:
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:  # Permet de lancer manuellement
+
+jobs:
+  dast-scan:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Étape 1 : Récupération du code
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      
+      # Étape 2 : Configuration de Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      # Étape 3 : Installation des dépendances
+      - name: Install Dependencies
+        run: npm ci
+      
+      # Étape 4 : Démarrage de l'application en arrière-plan
+      - name: Start Juice Shop Application
+        run: |
+          echo "🚀 Démarrage de Juice Shop..."
+          npm start &
+          
+          # Attendre que l'application soit prête
+          echo "⏳ Attente du démarrage de l'application..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "✅ Application démarrée avec succès"
+              break
+            fi
+            echo "Tentative $i/30..."
+            sleep 2
+          done
+        env:
+          NODE_ENV: test
+      
+      # Étape 5 : Vérification que l'application est accessible
+      - name: Verify Application is Running
+        run: |
+          echo "🔍 Vérification de l'application..."
+          curl -f http://localhost:3000 || exit 1
+          echo "✅ Application accessible"
+      
+      # Étape 6 : Scan OWASP ZAP Baseline
+      - name: OWASP ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.10.0
+        with:
+          target: 'http://localhost:3000'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -j'  # -a = ajax spider, -j = format JSON
+          allow_issue_writing: false
+          fail_action: true  # Échoue si des alertes sont trouvées
+      
+      # Étape 7 : Upload du rapport ZAP
+      - name: Upload ZAP Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-scan-report
+          path: |
+            report_html.html
+            report_json.json
+            report_md.md
+          retention-days: 30
+      
+      # Étape 8 : Analyse des résultats
+      - name: Analyze DAST Results
+        if: always()
+        run: |
+          echo "📊 Analyse des résultats DAST..."
+          
+          # Si le fichier JSON existe
+          if [ -f "report_json.json" ]; then
+            # Compter les alertes par niveau (si jq est disponible)
+            if command -v jq &> /dev/null; then
+              HIGH=$(jq '[.site[0].alerts[] | select(.riskcode=="3")] | length' report_json.json || echo "0")
+              MEDIUM=$(jq '[.site[0].alerts[] | select(.riskcode=="2")] | length' report_json.json || echo "0")
+              LOW=$(jq '[.site[0].alerts[] | select(.riskcode=="1")] | length' report_json.json || echo "0")
+              
+              echo "🔴 High: $HIGH"
+              echo "🟠 Medium: $MEDIUM"
+              echo "🟡 Low: $LOW"
+              
+              # Bloquer si vulnérabilités High
+              if [ "$HIGH" -gt 0 ]; then
+                echo "❌ ÉCHEC: Des vulnérabilités HIGH ont été détectées!"
+                echo "🔒 Le merge est BLOQUÉ."
+                exit 1
+              fi
+            fi
+          fi
+          
+          echo "✅ Scan DAST terminé"
+      
+      # Étape 9 : Commentaire sur PR
+      - name: Comment PR with DAST Results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = '🔍 **Analyse DAST (OWASP ZAP) terminée**\n\n' +
+                           'Le scan dynamique de sécurité a été exécuté sur l\'application.\n\n' +
+                           '📄 Consultez le rapport complet dans les artifacts.\n\n' +
+                           '⚠️ **Note:** Ce scan baseline détecte les vulnérabilités courantes. ' +
+                           'Pour une analyse plus approfondie, un scan complet serait nécessaire en staging.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

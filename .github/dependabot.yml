@@ -1,0 +1,72 @@
+# Configuration Dependabot pour surveillance automatique des dépendances
+# Ce fichier doit être placé dans .github/dependabot.yml
+
+version: 2
+
+updates:
+  # Configuration pour les dépendances npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"  # Vérification quotidienne
+      time: "03:00"      # À 3h du matin UTC
+    
+    # Nombre maximum de PR ouvertes simultanément
+    open-pull-requests-limit: 5
+    
+    # Stratégie de versioning
+    versioning-strategy: increase
+    
+    # Labels automatiques sur les PR
+    labels:
+      - "dependencies"
+      - "security"
+      - "npm"
+    
+    # Assignation automatique des PR
+    reviewers:
+      - "votre-username"  # Remplacez par votre username GitHub
+    
+    # Commit message personnalisé
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    
+    # Regroupement des mises à jour mineures
+    groups:
+      development-dependencies:
+        dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
+      
+      production-dependencies:
+        dependency-type: "production"
+        update-types:
+          - "patch"
+    
+    # Ignorer certains packages (optionnel)
+    # ignore:
+    #   - dependency-name: "package-name"
+    #     versions: ["1.x"]
+
+  # Configuration pour GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    
+    labels:
+      - "dependencies"
+      - "github-actions"
+    
+    commit-message:
+      prefix: "ci"
+
+# Notes importantes :
+# - Dependabot créera automatiquement des PR pour les vulnérabilités de sécurité
+# - Les PR de sécurité sont prioritaires et créées immédiatement
+# - Vous devez activer Dependabot Security Updates dans Settings > Security

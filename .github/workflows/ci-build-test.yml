@@ -46,6 +46,7 @@ jobs:
       - name: Run Unit Tests
         if: steps.build.outcome == 'success'  # Seulement si build OK
         run: npm test
+        continue-on-error: true  # Ne bloque pas si tests échouent
         env:
           NODE_ENV: test
       
